@@ -1,0 +1,108 @@
+---
+title: "Prediction"
+author: "Daniel de Paula e Silva"
+date: "18 de novembro de 2015"
+output: html_document
+---
+
+# Summary
+This document presents the analysis done on Weight Lifting data required by the peer assessment of the Coursera's "Practical Machine Learning" course. Details about the data can be found [here](http://groupware.les.inf.puc-rio.br/har). The goal of the analysis was to predict the manner in which the exercises had been done in the experiment where the dataset was colected from. The following sections show the process and the results for this analysis.
+
+# Getting and Loading the Data
+
+The first step is to obtain and load the dataset into R. The following code chunk shows how this was done:
+
+```{r, cache=TRUE}
+library(caret)
+
+# Download training data:
+if (!file.exists("training_data.csv")){
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv",destfile = "training_data.csv")
+}
+
+# Download testing data:
+if (!file.exists("test_data.csv")){
+  download.file("https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv",destfile = "test_data.csv")
+}
+
+# Load data into R:
+data.main <- read.csv( "training_data.csv", na.strings=c("","NA"), row.names=1 )
+data.testing <- read.csv( "test_data.csv", na.strings=c("","NA"), row.names=1 )
+```
+
+
+With the data loaded into R, it was possible start preprocessing it. The first step was to remove the columns that had close to zero variance and the columns that contained at least one missing value that could cause problems in the model. If this strategy happened to don't work, some of these columns would have been added again, with imputation.
+
+```{r, cache=TRUE}
+colsToRemove <- unique(c(
+  nearZeroVar(data.main), # Find columns with close to zero variance
+  which(colSums(is.na(data.main)) != 0) # Find columns with missing values
+))
+data.main <- data.main[,-colsToRemove]
+```
+
+Then, it was found out that there was a column with date/time information that had to be processed, so it was converted  to POSIXlt and the following information was extracted from it: weekday, hour and month. After that, the date column was removed together with some other unimportant ones.
+```{r, cache=TRUE}
+data.main$cvtd_timestamp <- as.POSIXlt(data.main$cvtd_timestamp, format="%d/%m/%Y %H:%M", tz="UTC")
+data.main$wday <- data.main$cvtd_timestamp$wday
+data.main$hour <- data.main$cvtd_timestamp$hour
+data.main$month <- data.main$cvtd_timestamp$mon
+
+data.testing$cvtd_timestamp <- as.POSIXlt(data.testing$cvtd_timestamp, format="%d/%m/%Y %H:%M", tz="UTC")
+data.testing$wday <- data.testing$cvtd_timestamp$wday
+data.testing$hour <- data.testing$cvtd_timestamp$hour
+data.testing$month <- data.testing$cvtd_timestamp$mon
+
+colsToRemove <- c("user_name","raw_timestamp_part_1","raw_timestamp_part_2","cvtd_timestamp","num_window")
+data.main <- data.main[,!(names(data.main) %in% colsToRemove)]
+```
+
+Finally, the data had 52 predictors and 1 target and it was ready to be divided into training and validation subsets:
+```{r, cache=TRUE}
+index <- createDataPartition(data.main$classe, p = 0.6, list=FALSE)
+data.training <- data.main[index,]
+data.validation <- data.main[-index,]
+```
+
+# Construction of the Random Forest Model
+
+As it was a classification problem, the first chosen model was the Random Forest. The steps for building the model with cross validation is shown in the following code chunk:
+```{r, cache=TRUE}
+set.seed(42)
+
+fit.rf <- train(
+  classe ~ .,
+  data = data.training,
+  method = "rf", 
+  trControl = trainControl(method = "cv", number = 4)
+)
+```
+
+Then, to check the accuracy and error, the model was applied to the validation dataset, and a confusion matrix was generated with the results:
+```{r, cache=TRUE}
+pred <- predict(fit.rf, newdata=data.validation)
+confusionMatrix(pred,data.validation$classe)
+```
+
+By looking at the confusion matrix and statistics above, it was possible to see an out-of-sample accuracy of 99.25%, which resulted in an out-of-sample error of 0,75% (1 - accuracy). As the found error was very low, it was possible to conclude that this model was good enough to be applied to the testing data, in order to predict the final values.
+
+# Prediction
+The final step of the analysis was to apply the generated model to the given testing data:
+```{r, cache=TRUE}
+data.testing <- data.testing[,names(data.testing) %in% names(data.main)]
+(pred.final <- predict(fit.rf, newdata=data.testing))
+```
+
+And then the result files could be written using the given function:
+```{r, cache=TRUE}
+pml_write_files = function(x){
+  n = length(x)
+  for(i in 1:n){
+    filename = paste0("results/problem_id_",i,".txt")
+    write.table(x[i],file=filename,quote=FALSE,row.names=FALSE,col.names=FALSE)
+  }
+}
+
+pml_write_files(as.character(pred.final))
+```
+
