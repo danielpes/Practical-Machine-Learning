@@ -84,7 +84,7 @@ pred <- predict(fit.rf, newdata=data.validation)
 confusionMatrix(pred,data.validation$classe)
 ```
 
-By looking at the confusion matrix and statistics above, it was possible to see an out-of-sample accuracy of 99.25%, which resulted in an out-of-sample error of 0,75% (1 - accuracy). As the found error was very low, it was possible to conclude that this model was good enough to be applied to the testing data, in order to predict the final values.
+By looking at the confusion matrix and statistics above, it was possible to see an out-of-sample accuracy of 99.06%, which resulted in an out-of-sample error of 0.94% (1 - accuracy). As the found error was very low, it was possible to conclude that this model was good enough to be applied to the testing data, in order to predict the final values.
 
 # Prediction
 The final step of the analysis was to apply the generated model to the given testing data:
